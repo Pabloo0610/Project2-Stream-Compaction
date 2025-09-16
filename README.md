@@ -63,7 +63,7 @@ The performance bottlenecks differ across implementations:
 - **Thrust Scan** is also bandwidth-limited, but highly optimized, approaching the GPU’s theoretical throughput.  
 - **CPU Scan** is **computation-bound** due to sequential execution and the absence of parallelism.  
 
-
+---
 
 ### Test Output
 ```
