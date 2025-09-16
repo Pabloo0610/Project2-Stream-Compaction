@@ -8,48 +8,61 @@ CUDA Stream Compaction
 * Tested on: Windows 10, AMD Ryzen 9 7950X3D @ 4201 Mhz, 16 Core(s), NVIDIA GeForce RTX 4080 SUPER
 
 ## 1. Project Description
-This project implements **parallel prefix-sum (scan)** and **stream compaction** algorithms, both on the CPU and GPU.  
+This project implements **parallel prefix-sum (scan)** and **stream compaction** algorithms on both the CPU and GPU.  
 The following features were implemented:
 
-- **CPU Baseline**: A sequential prefix sum for comparison.  
-- **Naive GPU Scan**: simple offset-based iterative implementation.  
-- **Work-Efficient GPU Scan**: uses up-sweep and down-sweep phases.  
-- **Thrust Scan**: wraps the Thrust library’s `exclusive_scan`.  
+- **CPU Baseline**: a sequential prefix-sum for comparison.  
+- **Naive GPU Scan**: a simple offset-based iterative implementation.  
+- **Work-Efficient GPU Scan**: an implementation based on the up-sweep and down-sweep phases of the Blelloch algorithm.  
+- **Thrust Scan**: a wrapper around Thrust’s `exclusive_scan`.  
 - **Stream Compaction**: removes zero elements from arrays, implemented on both CPU and GPU.  
 
 ### Extra Credit Features
-- **Faster Work-Efficient GPU Scan**: the number of launched threads in each loop iteration is reduced by half compared to the previous level.
+- **Optimized Work-Efficient GPU Scan**: in each iteration, the number of launched threads is halved compared to the previous level, reducing idle work and improving efficiency.
+
+---
 
 ## 2. Performance Analysis
 
-### Blocksize Optimization
-I experimented with different CUDA block sizes (32, 64, 128, 256, 512, 1024) for both **Naive** and **Work-Efficient** scans. All measurements are taken with `n = 2^20` . On my GPU, the average execution time for both implementations was **shortest at a block size of 128**. 
-The blocksize of rest of the experiments are set to **128**.
+### Block Size Optimization
+I experimented with different CUDA block sizes (32, 64, 128, 256, 512, 1024) for both **Naive** and **Work-Efficient** scans, using input size `n = 2^20`.  
+On my GPU, the shortest average execution time for both implementations was achieved with a block size of **128**.  
+Therefore, the block size for all subsequent experiments is set to **128**.
 
-### Analysis of the CPU, Naive, Work Efficient, and Thrust Scan
+---
 
-The performance of all implementations (Naive, Work-Efficient, Thrust, and CPU) on **power-of-two** array sizes (`2^n`) is shown in Figure 1. The performance of **non-power-of-two** (`2^n -3`) is similar to the situation of **power-of-two**. 
+### Performance of CPU, Naive, Work-Efficient, and Thrust Scans
+
+Figure 1 shows the performance of all implementations (Naive, Work-Efficient, Thrust, and CPU) for **power-of-two** array sizes (`2^n`). The performance trends for **non-power-of-two** inputs (`2^n - 3`) are qualitatively similar. 
 
 <p align="center">
   <img src="figures/scan_pow2.png" width="800"/>
 </p>
 
-<p align="center"><em>Figure 1. Performance comparison of CPU, Naive, Work-Efficient, and Thrust scans (Shorter time is better).</em></p>
+<p align="center"><em>Figure 1. Performance comparison of CPU, Naive, Work-Efficient, and Thrust scans (lower is better).</em></p>
 
-<!-- <p align="center">
+<!--
+<p align="center">
   <img src="figures/scan_nonpow2.png" width="800"/>
 </p>
-
-<p align="center"><em>Figure 1. Boids simulation with N = 5000.</em></p> -->
+<p align="center"><em>Figure 2. Performance comparison for non-power-of-two sizes.</em></p>
+-->
 
 #### Observations
-We can see that when the array size is small (< 2^20), CPU is faster, that is because of the overhead of the parellism of GPU hardware. When array size increases, GPU based approach becomes faster because of parrellism. Naive GPU scan is a little bit slower might because converting from inclusive scan to exclusive will take some time. Work efficient scan is much faster because working threads are halved at each level. Meanwhile, the thrust implementation performs best. 
+For small input sizes (< 2^20), the CPU baseline is faster due to the overhead associated with GPU parallelism. As the input size increases, GPU-based approaches outperform the CPU, benefiting from massive parallelism.  
+Among GPU implementations, the Naive scan is slightly slower, partly due to the additional step of converting from inclusive to exclusive scan. The Work-Efficient scan is significantly faster, as the number of active threads is halved at each iteration, reducing redundant work. The Thrust implementation consistently achieves the best performance.
+
+---
 
 #### Analysis
+Inspection of the Nsight timeline suggests that the superior performance of **Thrust Scan** arises from the use of warp-level intrinsics, coalesced memory access, and fewer kernel launches, which collectively minimize overhead.  
 
-From the Nsight timeline, the reason that **Thrust Scan** is much faster might because it uses warp-level intrinsics and optimized memory access to minimize overhead.
+The performance bottlenecks differ across implementations:  
+- **Naive Scan** is **computation-bound**, requiring many redundant additions and repeated kernel launches.  
+- **Work-Efficient Scan** is **memory I/O-bound**; although it reduces computation to O(n), each up-sweep and down-sweep phase reads and writes the entire array, so global memory bandwidth becomes the limiting factor.  
+- **Thrust Scan** is also bandwidth-limited, but highly optimized, approaching the GPU’s theoretical throughput.  
+- **CPU Scan** is **computation-bound** due to sequential execution and the absence of parallelism.  
 
-The performance bottlenecks differ across implementations. **Naive Scan** is computation-bound, since it requires many redundant additions and repeated kernel launches. **Work-Efficient Scan** is memory I/O-bound: although it reduces computation to O(n), every up-sweep and down-sweep level reads and writes the full array, making global memory bandwidth the limiting factor. Finally, the **CPU Scan** is computation-bound due to its sequential execution and lack of parallelism.
 
 
 ### Test Output
